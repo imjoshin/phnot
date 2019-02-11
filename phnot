@@ -84,21 +84,16 @@ class NotificationManager:
         return notifications
 
     def post_notification(self, n):
-        methods = ['apple'] if 'PHNOT_METHODS' not in os.environ else os.environ['PHNOT_METHODS'].split(',')
+        methods = get_methods()
         title = "{}: {}".format(n.id, n.description)
 
         if 'apple' in methods:
             self._post_to_applescript(title, n.message)
-        if 'pushbullet' in methods:
-            self._post_to_pushbullet(title, n.message)
 
     def _post_to_applescript(self, title, message):
         message = message.replace('"', '\\\"')
         cmd = "osascript -e 'display notification \"{}\" with title \"{}\"'".format(message, title)
         subprocess.Popen(cmd, stdout=subprocess.PIPE, shell=True)
-
-    def _post_to_pushbullet(self, title, message):
-        print("{}: {}".format(title, message))
 
 class ConsoleManager:
     def update_view(self, diffs, tasks):
@@ -138,7 +133,6 @@ class ConsoleManager:
 
     def get_diffs(self):
         cmd = 'cd {}; duoconnect -arc -relay phab.duosec.org arc list'.format(os.environ['PHNOT_DIR'])
-        cmd = 'cat ~/src/list.txt'
         p = subprocess.Popen(cmd, stdout=subprocess.PIPE, shell=True)
         diff_str, err = p.communicate()
 
@@ -153,7 +147,6 @@ class ConsoleManager:
 
     def get_tasks(self):
         cmd = 'cd {}; duoconnect -arc -relay phab.duosec.org arc tasks'.format(os.environ['PHNOT_DIR'])
-        cmd = 'cat ~/src/tasks.txt'
         p = subprocess.Popen(cmd, stdout=subprocess.PIPE, shell=True)
         task_str, err = p.communicate()
 
@@ -212,7 +205,7 @@ class PhabMail:
             self.connection.select(self.label)
 
             ids = self._get_new_email_ids()
-            self.last_email_id = int(ids[-1]) - 100
+            self.last_email_id = int(ids[-1])
 
         return self.connection
 
@@ -256,6 +249,9 @@ def get_regex_match(subject, regex_str, match_num=1):
 def get_user():
     user_var = 'PHNOT_USER' if 'PHNOT_USER' in os.environ else 'USER'
     return os.environ[user_var]
+
+def get_methods():
+    return ['apple'] if 'PHNOT_METHODS' not in os.environ else os.environ['PHNOT_METHODS'].split(',')
 
 def main():
     if 'PHNOT_PASS' not in os.environ:
