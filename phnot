@@ -1,0 +1,324 @@
+#! /usr/bin/python
+# -*- coding: UTF-8 -*-
+
+import email
+import imaplib
+import subprocess
+import time
+import os
+import re
+import signal
+import sys
+
+MAIL_DOMAIN   = "@duosecurity.com"
+SMTP_SERVER = "imap.gmail.com"
+SMTP_PORT   = 993
+
+PRIORITIES = "Unbreak Now!|Needs Triage|Wishlist|High|Normal|Low"
+
+DIFF_STATUS_MAP = {
+    "Needs Revision": "\033[31m✗\033[0m",
+    "Needs Review": "\033[33m⌽\033[0m",
+    "Accepted": "\033[32m✔\033[0m"
+}
+
+TASK_PRIORITY_MAP = {
+    "Unbreak Now!": "\033[31m⚠\033[0m",
+    "Needs Triage": "\033[36m↻\033[0m",
+    "Wishlist": "\033[33m★\033[0m",
+    "High": "\033[31m⬆\033[0m",
+    "Normal": "\033[33m▬\033[0m",
+    "Low": "\033[32m⬇\033[0m"
+}
+
+IGNORED_USERS = ["-bot"]
+IGNORED_SUBJECTS = ["[Diffusion] [Committed]", "[Differential] [Request]"]
+
+class NotificationManager:
+    def __init__(self, mail, console):
+        self.mail = mail
+        self.console = console
+        self.last_diffs = console.get_diffs()
+        self.last_tasks = console.get_tasks()
+
+    def get_notifications(self, diffs, tasks):
+        diff_notifications = self._get_arc_notifications(self.last_diffs, diffs, "Opened", "Landed")
+        task_notifications = self._get_arc_notifications(self.last_tasks, tasks, "Assigned", "Closed")
+        mail_notifications = self.mail.get_new_notifications(diffs)
+
+        self.last_diffs = diffs
+        self.last_tasks = tasks
+
+        return diff_notifications + task_notifications + mail_notifications
+
+    def _get_arc_notifications(self, prev, cur, new_verb, old_verb):
+        notifications = []
+
+        prev_ids = [a.id for a in prev]
+        cur_ids = [a.id for a in cur]
+
+        same = [a for a in cur if a.id in prev_ids]
+        new = [a for a in cur if a.id not in prev_ids]
+        closed = [a for a in prev if a.id not in cur_ids]
+
+        for a in new:
+            notifications.append(ArcNotification(a.id, a.description, "{} {}".format(new_verb, a.id)))
+        for a in closed:
+            notifications.append(ArcNotification(a.id, a.description, "{} {}".format(old_verb, a.id)))
+
+        for current in same:
+            attrs = [a for a in dir(current) if not a.startswith('_')]
+            previous = next(a for a in prev if a.id == current.id)
+            changes = []
+
+            for attr in attrs:
+                if getattr(current, attr) != getattr(previous, attr):
+                    changes.append(attr)
+
+            if len(changes) > 0:
+                msgs = []
+                for change in changes:
+                    msgs.append("Changed {} from \"{}\" to \"{}\"".format(change, getattr(previous, change), getattr(current, change)))
+                notifications.append(ArcNotification(current.id, current.description, '\n'.join(msgs)))
+
+        return notifications
+
+    def post_notification(self, n):
+        methods = ['apple'] if 'PHNOT_METHODS' not in os.environ else os.environ['PHNOT_METHODS'].split(',')
+        title = "{}: {}".format(n.id, n.description)
+
+        if 'apple' in methods:
+            self._post_to_applescript(title, n.message)
+        if 'pushbullet' in methods:
+            self._post_to_pushbullet(title, n.message)
+
+    def _post_to_applescript(self, title, message):
+        message = message.replace('"', '\\\"')
+        cmd = "osascript -e 'display notification \"{}\" with title \"{}\"'".format(message, title)
+        subprocess.Popen(cmd, stdout=subprocess.PIPE, shell=True)
+
+    def _post_to_pushbullet(self, title, message):
+        print("{}: {}".format(title, message))
+
+class ConsoleManager:
+    def update_view(self, diffs, tasks):
+        task_header = self._format_header("Phab Tasks", Colors.FG.magenta)
+        diff_header = self._format_header("Open Diffs", Colors.FG.yellow)
+
+        task_str = '\n'.join([self._format_task(task) for task in tasks])
+        diff_str = '\n'.join([self._format_diff(diff) for diff in diffs])
+
+        str = "{}\n\n{}\n\n\n{}\n\n{}".format(task_header, task_str, diff_header, diff_str)
+        bottom_pad = (self._get_terminal_height() - str.count('\n') - 2) * '\n'
+
+        self._empty_terminal()
+        print(str + bottom_pad)
+
+    def _get_terminal_height(self):
+        p = subprocess.Popen('tput lines', stdout=subprocess.PIPE, shell=True)
+        line_str, err = p.communicate()
+        return int(line_str)
+
+    def _empty_terminal(self):
+        print(chr(27) + "[2J")
+
+    def _format_diff(self, diff):
+        id = "{}{}{}".format(Colors.bold, diff.id, Colors.reset)
+        status = " " if diff.status not in DIFF_STATUS_MAP else DIFF_STATUS_MAP[diff.status]
+        return "{} {}  {}".format(id, status, diff.description)
+
+    def _format_task(self, task):
+        id = "{}{}{}".format(Colors.bold, task.id, Colors.reset)
+        priority = " " if task.priority not in TASK_PRIORITY_MAP else TASK_PRIORITY_MAP[task.priority]
+        return "{} {}  {}".format(id, priority, task.description)
+
+    def _format_header(self, str, color):
+        return "{}{}===={}{} {} {}===={}".format(
+            Colors.bold, color, Colors.reset, Colors.bold, str, color, Colors.reset)
+
+    def get_diffs(self):
+        cmd = 'cd {}; duoconnect -arc -relay phab.duosec.org arc list'.format(os.environ['PHNOT_DIR'])
+        cmd = 'cat ~/src/list.txt'
+        p = subprocess.Popen(cmd, stdout=subprocess.PIPE, shell=True)
+        diff_str, err = p.communicate()
+
+        diffs = []
+        for line in diff_str.split('\n'):
+            if line.strip() == "":
+                break
+
+            diffs.append(Diff(line))
+
+        return diffs
+
+    def get_tasks(self):
+        cmd = 'cd {}; duoconnect -arc -relay phab.duosec.org arc tasks'.format(os.environ['PHNOT_DIR'])
+        cmd = 'cat ~/src/tasks.txt'
+        p = subprocess.Popen(cmd, stdout=subprocess.PIPE, shell=True)
+        task_str, err = p.communicate()
+
+        tasks = []
+        for line in task_str.split('\n'):
+            if line.strip() == "":
+                break
+
+            tasks.append(Task(line))
+
+        return tasks
+
+class Diff:
+    def __init__(self, diff_str):
+        self.id = get_regex_match(diff_str, "(D[0-9]+):")
+        self.description = get_regex_match(diff_str, "D[0-9]+: (.*)")
+        self.status = get_regex_match(diff_str, "^\* ([a-zA-Z ]+) D")
+
+class Task:
+    def __init__(self, task_str):
+        self.id = get_regex_match(task_str, "(T[0-9]+)")
+        self.description = get_regex_match(task_str, "T[0-9]+ (.+)\s\s+({})".format(PRIORITIES))
+        self.priority = get_regex_match(task_str, "T[0-9]+ .+\s\s+({})\s\s+".format(PRIORITIES))
+        self.status = get_regex_match(task_str, "T[0-9]+ .+\s\s+({})\s\s+(.*)".format(PRIORITIES), match_num=2)
+
+class ArcNotification:
+    def __init__(self, id, description, message):
+        self.id = id
+        self.description = description
+        self.message = message
+
+class MailNotification:
+    def __init__(self, mail_user, mail_subject):
+        if get_user() in mail_user:
+            self.user = "You"
+        else:
+            self.user = get_regex_match(mail_user, "\((.*)\)")
+
+        self.action = get_regex_match(mail_subject, "\[Differential\] \[([a-zA-Z ]*)\]").lower()
+        self.id = get_regex_match(mail_subject, "(D[0-9]+):")
+        self.description = get_regex_match(mail_subject, "D[0-9]+: (.*)")
+        self.message = "{} {} {}".format(self.user, self.action, self.id)
+
+class PhabMail:
+    def __init__(self, email, password, label):
+        self.email = email
+        self.password = password
+        self.label = label
+        self.last_email_id = -1
+        self.connection = None
+
+    def connect(self):
+        if not self.connection:
+            self.connection = imaplib.IMAP4_SSL(SMTP_SERVER)
+            self.connection.login(self.email, self.password)
+            self.connection.select(self.label)
+
+            ids = self._get_new_email_ids()
+            self.last_email_id = int(ids[-1]) - 100
+
+        return self.connection
+
+    def _get_new_email_ids(self):
+        _, data = self.connection.search(None, 'ALL')
+        str_ids = data[0].split()
+        new_ids = [id for id in str_ids if int(id) > self.last_email_id]
+        return new_ids
+
+    def get_new_notifications(self, diffs):
+        new_ids = self._get_new_email_ids()
+
+        if len(new_ids) == 0:
+            return []
+
+        diff_ids = [diff.id for diff in diffs]
+        ids = ','.join(new_ids)
+        typ, data = self.connection.fetch(ids, '(RFC822)' )
+        new_mail = []
+
+        for response_part in data:
+            if isinstance(response_part, tuple):
+                msg = email.message_from_string(response_part[1])
+                should_ignore_subject = sum([1 for sub in IGNORED_SUBJECTS if sub in msg['subject']])
+                should_ignore_user = sum([1 for sub in IGNORED_USERS if sub in msg['from']])
+
+                if not should_ignore_subject and not should_ignore_user:
+                    notification = MailNotification(msg['from'], msg['subject'])
+
+                    if notification.id in diff_ids:
+                        new_mail.append(notification)
+
+        self.last_email_id = new_ids[-1]
+        return new_mail
+
+def get_regex_match(subject, regex_str, match_num=1):
+    regex = re.compile(regex_str)
+    match = regex.search(subject)
+    return match.group(match_num)
+
+def get_user():
+    user_var = 'PHNOT_USER' if 'PHNOT_USER' in os.environ else 'USER'
+    return os.environ[user_var]
+
+def main():
+    if 'PHNOT_PASS' not in os.environ:
+        print("PHNOT_PASS is not set.")
+        exit(1)
+
+    if 'PHNOT_LABEL' not in os.environ:
+        print("PHNOT_LABEL is not set.")
+        exit(1)
+
+    if 'PHNOT_DIR' not in os.environ:
+        print("PHNOT_DIR is not set.")
+        exit(1)
+
+    email = get_user() + "+phnot" + MAIL_DOMAIN
+
+    mail = PhabMail(email, os.environ['PHNOT_PASS'], os.environ['PHNOT_LABEL'])
+    mail.connect()
+
+    console = ConsoleManager()
+    manager = NotificationManager(mail, console)
+
+    while True:
+        try:
+            diffs = console.get_diffs()
+            tasks = console.get_tasks()
+            console.update_view(diffs, tasks)
+
+            notifications = manager.get_notifications(diffs, tasks)
+            for n in notifications:
+                manager.post_notification(n)
+        except Exception, e:
+            print str(e)
+
+        time.sleep(1)
+
+class Colors:
+    reset='\033[0m'
+    bold='\033[01m'
+    disable='\033[02m'
+    underline='\033[04m'
+    reverse='\033[07m'
+    strikethrough='\033[09m'
+    class FG:
+        black='\033[30m'
+        red='\033[31m'
+        green='\033[32m'
+        yellow='\033[33m'
+        blue='\033[34m'
+        magenta='\033[35m'
+        cyan='\033[36m'
+    class BG:
+        black='\033[40m'
+        red='\033[41m'
+        green='\033[42m'
+        yellow='\033[43m'
+        blue='\033[44m'
+        magenta='\033[45m'
+        cyan='\033[46m'
+
+def signal_handler(sig, frame):
+    exit(0)
+
+if __name__ == "__main__":
+    signal.signal(signal.SIGINT, signal_handler)
+    main()
