@@ -46,7 +46,7 @@ class ConsoleManager:
         diff_str, err = p.communicate()
 
         diffs = []
-        for line in diff_str.split('\n'):
+        for line in diff_str.decode().split('\n'):
             if line.strip() == "":
                 break
 
@@ -61,7 +61,7 @@ class ConsoleManager:
         task_str, err = p.communicate()
 
         tasks = []
-        for line in task_str.split('\n'):
+        for line in task_str.decode().split('\n'):
             if line.strip() == "":
                 break
 

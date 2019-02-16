@@ -34,6 +34,4 @@ TASK_PRIORITY_MAP = {
     "Low": "\033[32m⬇\033[0m"
 }
 
-IGNORED_USERS = []
-# IGNORED_USERS = ["-bot"]
-IGNORED_SUBJECTS = ["[Diffusion] [Committed]", "[Differential] [Request]"]
+IGNORED_USERS = ["-bot"]

@@ -1,4 +1,4 @@
-#! /usr/bin/python
+#! /usr/local/bin/python3
 import subprocess
 import time
 import signal
@@ -16,6 +16,9 @@ def main():
     mail = PhabMail(email, auth.MAIL_PASS, conf.MAIL_DIFF_LABEL, conf.MAIL_TASK_LABEL)
     mail.connect()
 
+    diff_ids = []
+    task_ids = []
+
     console = ConsoleManager()
     manager = NotificationManager(mail, console)
 
@@ -25,12 +28,16 @@ def main():
         tasks = console.get_tasks()
         console.update_view(diffs, tasks)
 
-        diff_notifications = mail.get_diff_notifications(diffs)
-        print(diff_notifications)
+        diff_ids = diff_ids + [diff.id for diff in diffs if diff.id not in diff_ids]
+        task_ids = task_ids + [task.id for task in tasks if task.id not in task_ids]
 
-        # notifications = manager.get_notifications(diffs, tasks)
-        # for n in notifications:
-        #     manager.post_notification(n)
+        diff_notifications = mail.get_diff_notifications(diff_ids)
+        task_notifications = mail.get_task_notifications(diff_ids)
+        all_notifications = diff_notifications + task_notifications
+
+        for n in all_notifications:
+            manager.post_notification(n)
+
         # except Exception, e:
         #     print str(e)
 

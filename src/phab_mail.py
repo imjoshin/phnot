@@ -7,6 +7,7 @@ import sys
 import conf
 import auth
 import util
+import parse
 from entities import Diff, Task, ArcNotification, MailNotification, Notification
 
 class PhabMail:
@@ -26,18 +27,18 @@ class PhabMail:
 
             self.connection.select(self.diff_label)
             ids = self._get_new_email_ids(-1)
-            self.last_diff_id = int(ids[-1]) - 100
+            self.last_diff_id = int(ids[-1])
 
             self.connection.select(self.task_label)
             ids = self._get_new_email_ids(-1)
-            self.last_task_id = int(ids[-1]) - 100
+            self.last_task_id = int(ids[-1])
 
         return self.connection
 
     def _get_new_email_ids(self, last_id):
         _, data = self.connection.search(None, 'ALL')
         str_ids = data[0].split()
-        new_ids = [id for id in str_ids if int(id) > last_id]
+        new_ids = [id for id in str_ids if int(id) > int(last_id)]
         return new_ids
 
     def _get_new_email(self, last_id, open):
@@ -46,36 +47,42 @@ class PhabMail:
         if len(new_ids) == 0:
             return [], last_id
 
-        filter_ids = [o.id for o in open]
-        ids = ','.join(new_ids)
+        ids = b','.join(new_ids)
         typ, data = self.connection.fetch(ids, '(RFC822)' )
         new_mail = []
 
         for response_part in data:
             if isinstance(response_part, tuple):
-                mail = email.message_from_string(response_part[1])
+                mail = email.message_from_string(response_part[1].decode())
                 new_mail.append(mail)
 
         return new_mail, new_ids[-1]
 
-    def get_diff_notifications(self, diffs, parser):
-        diff_ids = [diff.id for diff in diffs]
-        self.connection.select(self.diff_label)
-        new_mail, last_id = self._get_new_email(self.last_diff_id, diffs)
+    def get_diff_notifications(self, diff_ids):
+        notifications, last_id = self._get_notifications(diff_ids, self.diff_label, self.last_diff_id, parse.DiffParser())
+        self.last_diff_id = last_id
+        return notifications
+
+    def get_task_notifications(self, task_ids):
+        notifications, last_id = self._get_notifications(task_ids, self.task_label, self.last_task_id, parse.TaskParser())
+        self.last_task_id = last_id
+        return notifications
+
+    def _get_notifications(self, open_ids, label, last_id, parser):
+        self.connection.select(label)
+        new_mail, last_id = self._get_new_email(last_id, open)
         notifications = []
 
         for mail in new_mail:
-            should_ignore_subject = sum([1 for sub in conf.IGNORED_SUBJECTS if sub in mail['subject']])
-            should_ignore_user = sum([1 for sub in conf.IGNORED_USERS if sub in mail['from']])
-            if should_ignore_subject or should_ignore_user:
-                continue
+            phab_id = util.regex_phab_id(mail['subject'])
+            phab_desc = util.get_regex_match(mail['subject'], "D[0-9]+: (.*)")
 
-            diff_id = util.regex_diff_id(mail['subject'])
-            print(mail.get_payload(decode=True), "\n\n\n\n")
+            if phab_id in open_ids:
+                body = mail.get_payload(decode=True)
+                if mail.is_multipart():
+                    body = ''.join([str(p) for p in body.get_payload(decode=True)])
 
-            if diff_id in diff_ids:
-                notifications.append(mail['subject'])
+                parsed = parser.parse(phab_id, phab_desc, body.decode())
+                notifications = notifications + parsed
 
-        self.last_diff_id = last_id
-
-        return notifications
+        return notifications, last_id
