@@ -1,0 +1,44 @@
+#! /usr/bin/python
+import subprocess
+import time
+import signal
+import conf
+import auth
+from notification_manager import NotificationManager
+from console_manager import ConsoleManager
+from phab_mail import PhabMail
+from entities import Diff, Task, ArcNotification, MailNotification
+from colors import Colors
+
+def main():
+    email = auth.MAIL_USER + "+phnot" + conf.MAIL_DOMAIN
+
+    mail = PhabMail(email, auth.MAIL_PASS, conf.MAIL_DIFF_LABEL, conf.MAIL_TASK_LABEL)
+    mail.connect()
+
+    console = ConsoleManager()
+    manager = NotificationManager(mail, console)
+
+    while True:
+        # try:
+        diffs = console.get_diffs()
+        tasks = console.get_tasks()
+        console.update_view(diffs, tasks)
+
+        diff_notifications = mail.get_diff_notifications(diffs)
+        print(diff_notifications)
+
+        # notifications = manager.get_notifications(diffs, tasks)
+        # for n in notifications:
+        #     manager.post_notification(n)
+        # except Exception, e:
+        #     print str(e)
+
+        time.sleep(1)
+
+def signal_handler(sig, frame):
+    exit(0)
+
+if __name__ == "__main__":
+    signal.signal(signal.SIGINT, signal_handler)
+    main()
