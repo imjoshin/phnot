@@ -15,6 +15,8 @@ METHODS = [
     'slack'
 ]
 SLACK_USER_ID = "DFESEUQTY"
+SLACK_BOT_USER = "Phabricator"
+SLACK_BOT_ICON = ":duounicorn:"
 
 # Parsing settings
 PRIORITIES = "Unbreak Now!|Needs Triage|Wishlist|High|Normal|Low"

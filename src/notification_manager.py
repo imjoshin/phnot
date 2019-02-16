@@ -28,7 +28,8 @@ class NotificationManager:
         data = {
             'channel': conf.SLACK_USER_ID,
             'text': message,
-            'username': 'Phabricator',
+            'username': conf.SLACK_BOT_USER,
+            'icon_emoji': conf.SLACK_BOT_ICON,
             'link_names': True
         }
 

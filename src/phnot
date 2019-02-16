@@ -10,7 +10,13 @@ from phab_mail import PhabMail
 from entities import Diff, Task
 from colors import Colors
 
+def validate_conf():
+    if conf.SLACK_USER_ID[0] != "D":
+        print("SLACK_USER_ID must be a user ID. Given {}.".format(conf.SLACK_USER_ID))
+        exit(1)
+
 def main():
+    validate_conf()
     email = auth.MAIL_USER + "+phnot" + conf.MAIL_DOMAIN
 
     mail = PhabMail(email, auth.MAIL_PASS, conf.MAIL_DIFF_LABEL, conf.MAIL_TASK_LABEL)
