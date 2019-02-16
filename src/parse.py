@@ -7,14 +7,11 @@ import soupsieve
 from entities import Notification
 
 class DiffParser():
-    def _should_ignore_username(self, username):
-        return username is None or username == auth.MAIL_USER or sum([1 for user in conf.IGNORED_USERS if user in username])
-
     def _get_request_changes(self, id, desc, body):
         ret = None
         username = util.get_regex_match(body, ">([^>]+) requested changes to this revision.")
 
-        if not self._should_ignore_username(username):
+        if not util.should_ignore_username(username):
             short_message = "{} requested changes to {}.".format(username, id)
             long_message = "{} requested changes to {}: {}.".format(username, id, desc)
             ret = Notification(id, desc, short_message, long_message)
@@ -29,12 +26,12 @@ class DiffParser():
         ret = None
         username = util.get_regex_match(body, ">([^>]+) added a comment.")
 
-        if not self._should_ignore_username(username):
+        if not util.should_ignore_username(username):
             short_message = "{} added a comment to {}.".format(username, id)
             long_message = "@{} added a comment to *{}: {}*.".format(username, id, desc)
             soup = BeautifulSoup(body, 'html.parser')
             paragraphs = soup.select("div > div > p")
-            if len(paragraphs) > 0:
+            if len(paragraphs) > 0 and len(paragraphs[0].parent.text) > 0:
                 long_message = "{}\n```{}```".format(long_message, paragraphs[0].parent.text)
 
             ret = Notification(id, desc, short_message, long_message)
@@ -46,7 +43,7 @@ class DiffParser():
         username = util.get_regex_match(body, ">([^>]+) added inline comments")
 
         # found inline comments
-        if not self._should_ignore_username(username):
+        if not util.should_ignore_username(username):
             short_message = "{} added inline comments to {}.".format(username, id)
             long_message = "@{} added inline comments to *{}: {}*.".format(username, id, desc)
             soup = BeautifulSoup(body, 'html.parser')
@@ -87,5 +84,38 @@ class DiffParser():
         return [n for n in notifications if n is not None]
 
 class TaskParser():
-    def parse(self, id, body):
-        return []
+    def _get_comments(self, id, desc, body):
+        ret = None
+        username = util.get_regex_match(body, ">([^>]+) added a comment.")
+
+        if not util.should_ignore_username(username):
+            short_message = "{} added a comment to {}.".format(username, id)
+            long_message = "@{} added a comment to *{}: {}*.".format(username, id, desc)
+            soup = BeautifulSoup(body, 'html.parser')
+            paragraphs = soup.select("div > div > p")
+            if len(paragraphs) > 0 and len(paragraphs[0].parent.text) > 0:
+                long_message = "{}\n```{}```".format(long_message, paragraphs[0].parent.text)
+
+            ret = Notification(id, desc, short_message, long_message)
+
+        return ret
+
+    def _get_task_move(self, id, desc, body):
+        ret = None
+        username = util.get_regex_match(body, ">([^>]+) moved this task")
+        movement = util.get_regex_match(body, "moved this task ([^\.]+)")
+
+        if not util.should_ignore_username(username):
+            short_message = "{} moved {} {}.".format(username, id, movement)
+            long_message = "@{} moved *{}: {}* {}.".format(username, id, desc, movement)
+            ret = Notification(id, desc, short_message, long_message)
+
+        return ret
+
+    def parse(self, id, desc, body):
+        notifications = [
+            self._get_comments(id, desc, body),
+            self._get_task_move(id, desc, body),
+        ]
+
+        return [n for n in notifications if n is not None]

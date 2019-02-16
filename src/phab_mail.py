@@ -8,7 +8,7 @@ import conf
 import auth
 import util
 import parse
-from entities import Diff, Task, ArcNotification, MailNotification, Notification
+from entities import Notification
 
 class PhabMail:
     def __init__(self, email, password, diff_label, task_label):
@@ -75,7 +75,7 @@ class PhabMail:
 
         for mail in new_mail:
             phab_id = util.regex_phab_id(mail['subject'])
-            phab_desc = util.get_regex_match(mail['subject'], "D[0-9]+: (.*)")
+            phab_desc = util.get_regex_match(mail['subject'], "[DT][0-9]+: (.*)")
 
             if phab_id in open_ids:
                 body = mail.get_payload(decode=True)

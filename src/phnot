@@ -7,7 +7,7 @@ import auth
 from notification_manager import NotificationManager
 from console_manager import ConsoleManager
 from phab_mail import PhabMail
-from entities import Diff, Task, ArcNotification, MailNotification
+from entities import Diff, Task
 from colors import Colors
 
 def main():
@@ -37,8 +37,9 @@ def main():
 
             for n in all_notifications:
                 manager.post_notification(n)
-        except Exception, e:
-            print str(e)
+
+        except Exception as e:
+            print(str(e))
 
         time.sleep(1)
 
