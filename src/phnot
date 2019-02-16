@@ -23,23 +23,22 @@ def main():
     manager = NotificationManager(mail, console)
 
     while True:
-        # try:
-        diffs = console.get_diffs()
-        tasks = console.get_tasks()
-        console.update_view(diffs, tasks)
+        try:
+            diffs = console.get_diffs()
+            tasks = console.get_tasks()
+            console.update_view(diffs, tasks)
 
-        diff_ids = diff_ids + [diff.id for diff in diffs if diff.id not in diff_ids]
-        task_ids = task_ids + [task.id for task in tasks if task.id not in task_ids]
+            diff_ids = diff_ids + [diff.id for diff in diffs if diff.id not in diff_ids]
+            task_ids = task_ids + [task.id for task in tasks if task.id not in task_ids]
 
-        diff_notifications = mail.get_diff_notifications(diff_ids)
-        task_notifications = mail.get_task_notifications(diff_ids)
-        all_notifications = diff_notifications + task_notifications
+            diff_notifications = mail.get_diff_notifications(diff_ids)
+            task_notifications = mail.get_task_notifications(diff_ids)
+            all_notifications = diff_notifications + task_notifications
 
-        for n in all_notifications:
-            manager.post_notification(n)
-
-        # except Exception, e:
-        #     print str(e)
+            for n in all_notifications:
+                manager.post_notification(n)
+        except Exception, e:
+            print str(e)
 
         time.sleep(1)
 

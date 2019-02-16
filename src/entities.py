@@ -15,24 +15,6 @@ class Task:
         self.priority = util.get_regex_match(task_str, "T[0-9]+ .+\s\s+({})\s\s+".format(conf.PRIORITIES)).strip()
         self.status = util.get_regex_match(task_str, "T[0-9]+ .+\s\s+({})\s\s+(.*)".format(conf.PRIORITIES), match_num=2).strip()
 
-class ArcNotification:
-    def __init__(self, id, description, message):
-        self.id = id
-        self.description = description
-        self.message = message
-
-class MailNotification:
-    def __init__(self, mail_user, mail_subject):
-        if auth.MAIL_USER in mail_user:
-            self.user = "You"
-        else:
-            self.user = util.get_regex_match(mail_user, "\((.*)\)")
-
-        self.action = util.get_regex_match(mail_subject, "\[Differential\] \[([a-zA-Z ]*)\]").lower()
-        self.id = util.get_regex_match(mail_subject, "(D[0-9]+):")
-        self.description = util.get_regex_match(mail_subject, "D[0-9]+: (.*)")
-        self.message = "{} {} {}".format(self.user, self.action, self.id)
-
 class Notification:
     def __init__(self, id, description, short_message, long_message):
         self.id = id
