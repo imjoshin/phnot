@@ -7,7 +7,7 @@ import auth
 from notification_manager import NotificationManager
 from console_manager import ConsoleManager
 from phab_mail import PhabMail
-from entities import Diff, Task
+from entities import Notification
 from colors import Colors
 
 def validate_conf():
@@ -27,6 +27,9 @@ def main():
 
     console = ConsoleManager()
     manager = NotificationManager()
+
+    start_msg = "Started *phnot*! Watching for notifications now..."
+    manager.post_notification(Notification("Phnot", "Message", start_msg, start_msg))
 
     while True:
         try:
