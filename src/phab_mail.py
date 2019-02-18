@@ -27,18 +27,18 @@ class PhabMail:
 
             self.connection.select(self.diff_label)
             ids = self._get_new_email_ids(-1)
-            self.last_diff_id = int(ids[-1])
+            self.last_diff_id = ids[-1]
 
             self.connection.select(self.task_label)
             ids = self._get_new_email_ids(-1)
-            self.last_task_id = int(ids[-1])
+            self.last_task_id = ids[-1]
 
         return self.connection
 
     def _get_new_email_ids(self, last_id):
         _, data = self.connection.search(None, 'ALL')
         str_ids = data[0].split()
-        new_ids = [id for id in str_ids if int(id) > int(last_id)]
+        new_ids = [int(id) for id in str_ids if int(id) > int(last_id)]
         return new_ids
 
     def _get_new_email(self, last_id, open):
@@ -47,7 +47,7 @@ class PhabMail:
         if len(new_ids) == 0:
             return [], last_id
 
-        ids = b','.join(new_ids)
+        ids = ",".join([str(id) for id in new_ids])
         typ, data = self.connection.fetch(ids, '(RFC822)' )
         new_mail = []
 

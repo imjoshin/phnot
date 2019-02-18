@@ -3,6 +3,7 @@ import subprocess
 import json
 import os
 import util
+import auth
 
 class NotificationManager:
     def post_notification(self, notification):
@@ -27,5 +28,5 @@ class NotificationManager:
             'link_names': True
         }
 
-        cmd = "curl -X POST -H 'Content-type: application/json' --data '{}' {}".format(json.dumps(data), os.environ['PHNOT_SLACK_HOOK'])
+        cmd = "curl -X POST -H 'Content-type: application/json' --data '{}' {}".format(json.dumps(data), auth.SLACK_HOOK)
         subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)

@@ -3,7 +3,8 @@ import auth
 import conf
 
 def should_ignore_username(username):
-    return username is None or username == auth.MAIL_USER or sum([1 for user in conf.IGNORED_USERS if user in username])
+    ignore_due_to_current_user = conf.IGNORE_MY_ACTIONS and username == auth.MAIL_USER
+    return username is None or ignore_due_to_current_user or sum([1 for user in conf.IGNORED_USERS if user in username])
 
 def regex_phab_id(subject):
     return get_regex_match(subject, "([DT][0-9]{4,})")

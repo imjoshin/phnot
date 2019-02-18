@@ -9,6 +9,7 @@ SMTP_PORT = 993
 
 # Misc
 REPO_DIR = "~/src/trustedpath"
+IGNORE_MY_ACTIONS = True
 
 # Notification settings
 METHODS = [
@@ -16,7 +17,7 @@ METHODS = [
 ]
 SLACK_USER_ID = "DFESEUQTY"
 SLACK_BOT_USER = "Phabricator"
-SLACK_BOT_ICON = ":duounicorn:"
+SLACK_BOT_ICON = ":phabricator:"
 
 # Parsing settings
 PRIORITIES = "Unbreak Now!|Needs Triage|Wishlist|High|Normal|Low"
