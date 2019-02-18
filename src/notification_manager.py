@@ -5,12 +5,6 @@ import os
 import util
 
 class NotificationManager:
-    def __init__(self, mail, console):
-        self.mail = mail
-        self.console = console
-        self.last_diffs = console.get_diffs()
-        self.last_tasks = console.get_tasks()
-
     def post_notification(self, notification):
         if 'apple' in conf.METHODS:
             self._post_to_applescript(notification)
