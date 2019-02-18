@@ -13,7 +13,7 @@ class DiffParser():
 
         if not util.should_ignore_username(username):
             short_message = "{} requested changes to {}.".format(username, id)
-            long_message = "{} requested changes to {}: {}.".format(username, id, desc)
+            long_message = "@{} requested changes to {}: {}.".format(username, id, desc)
             ret = Notification(id, desc, short_message, long_message)
         elif 'This revision now requires changes to proceed' in body:
             short_message = "{} requires changes to proceed.".format(id)
