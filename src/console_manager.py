@@ -2,6 +2,7 @@ from colors import Colors
 from entities import Diff, Task
 import subprocess
 import conf
+import util
 
 class ConsoleManager:
     def update_view(self, diffs, tasks):
@@ -45,6 +46,10 @@ class ConsoleManager:
         p = subprocess.Popen(cmd, stdout=subprocess.PIPE, shell=True)
         diff_str, err = p.communicate()
 
+        has_diffs = bool(util.regex_phab_id(diff_str.decode()))
+        if not has_diffs:
+            return []
+
         diffs = []
         for line in diff_str.decode().split('\n'):
             if line.strip() == "":
@@ -59,6 +64,10 @@ class ConsoleManager:
         # cmd = 'cat ~/src/tasks.txt'
         p = subprocess.Popen(cmd, stdout=subprocess.PIPE, shell=True)
         task_str, err = p.communicate()
+
+        has_tasks = bool(util.regex_phab_id(task_str.decode()))
+        if not has_tasks:
+            return []
 
         tasks = []
         for line in task_str.decode().split('\n'):
