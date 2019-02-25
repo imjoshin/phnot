@@ -7,6 +7,17 @@ import soupsieve
 from entities import Notification
 
 class DiffParser():
+    def _get_new_revision(self, id, desc, body):
+        ret = None
+        username = util.get_regex_match(body, ">([^>]+) created this revision")
+
+        if not util.should_ignore_username(username):
+            short_message = "{} created a new revision - {}: {}.".format(username, id, desc)
+            long_message = "@" + short_message
+            ret = Notification(id, desc, short_message, long_message)
+
+        return ret
+
     def _get_request_changes(self, id, desc, body):
         ret = None
         username = util.get_regex_match(body, ">([^>]+) requested changes to this revision.")
